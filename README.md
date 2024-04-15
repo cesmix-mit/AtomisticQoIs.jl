@@ -7,3 +7,5 @@
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/cesmix-mit/AtomisticQoIs.jl?svg=true)](https://ci.appveyor.com/project/cesmix-mit/AtomisticQoIs-jl)
 [![Coverage](https://codecov.io/gh/cesmix-mit/AtomisticQoIs.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/cesmix-mit/AtomisticQoIs.jl)
 [![Coverage](https://coveralls.io/repos/github/cesmix-mit/AtomisticQoIs.jl/badge.svg?branch=main)](https://coveralls.io/github/cesmix-mit/AtomisticQoIs.jl?branch=main)
+
+Methods for computing expectation-valued quantities of interest (QoIs) from molecular dynamics simulation.
