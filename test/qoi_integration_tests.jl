@@ -104,14 +104,6 @@ end
     πg = Gibbs(πgibbs, θ=θtest)
     Z = normconst(πg, GQint)
 
-    
-    # check this section
-    nsamp = 10000
-    nuts = NUTS()
-    g = Gibbs(V=V, ∇xV=∇xV, ∇θV=∇θV, β=1.0, θ=[3,3])
-    MCint = MCMC(nsamp, nuts, ρx0)
-    Qmc = expectation(θtest, q, MCint)
-    @time ∇Qmc = grad_expectation(θtest, q, MCint)
 
 end 
 

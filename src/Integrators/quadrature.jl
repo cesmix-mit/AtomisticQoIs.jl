@@ -12,8 +12,8 @@ Contains parameters for 1D or 2D Gauss quadrature integration.
 - `d :: Real`                                     : dimension
 """
 struct GaussQuadrature <: QuadIntegrator
-    ξ :: Union{Vector{<:Real}, Vector{<:Vector}, Vector} 
-    w :: Vector{<:Real}
+    ξ :: Union{Vector{<:Real}, Vector{<:Vector}} 
+    w :: Union{Vector{<:Real}, Vector{<:Vector}}
 end
 
 # simple grid integration
@@ -36,7 +36,7 @@ Computes 1D Gauss quadrature points with a change of domain to limits=[ll, ul].
 - `ξ :: Vector{<:Real}`     : quadrature points ranging [ll, ul]
 - `w :: Vector{<:Real}`     : quadrature weights
 """
-function gaussquad(nquad::Integer, gaussbasis::Function, args...; limits=[-1,1])
+function gaussquad(nquad::Integer, gaussbasis::Function, args...; limits::Vector{<:Real}=[-1,1])
     ξ, w = gaussbasis(nquad, args...)
     ξ, w = rescale(ξ, w, limits)
     return ξ, w
@@ -62,7 +62,7 @@ function gaussquad_2D(nquad::Integer, gaussbasis::Function, args...; limits=[[-1
     ξ, w = gaussbasis(nquad, args...)
     if typeof(limits) <: Vector{<:Real}
         ξ1, w1 = rescale(ξ, w, limits)
-        ξ2 = ξ1; w1 = w2
+        ξ2 = ξ1; w2 = w1
     else
         ξ1, w1 = rescale(ξ, w, limits[1])
         ξ2, w2 = rescale(ξ, w, limits[2])
