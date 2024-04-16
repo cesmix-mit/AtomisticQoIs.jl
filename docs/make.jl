@@ -22,4 +22,5 @@ makedocs(;
 deploydocs(;
     repo="github.com/cesmix-mit/AtomisticQoIs.jl",
     devbranch="main",
+    push_preview = true,
 )
