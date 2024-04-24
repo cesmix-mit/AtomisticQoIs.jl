@@ -30,18 +30,10 @@ jobs:
             Pkg.Registry.add(RegistrySpec(url = "https://github.com/ACEsuit/ACEregistry"))
           '
         shell: bash
-      - name: Install dependencies
-        # run: |
-        #   julia --project=docs/ -e '
-        #     using Pkg
-        #     Pkg.add([
-        #       PackageSpec(;url="https://github.com/joannajzou/ActiveSubspaces.jl"),
-        #     ])
-        #     Pkg.develop(PackageSpec(path=pwd()))
-        #     Pkg.instantiate()
-        #   '
       - name: Build and deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
-        run: julia --project=docs/ docs/make.jl
+        run: |
+          julia --project=docs -e 'import Pkg; Pkg.develop(path=".")'
+          julia --project=docs/ docs/make.jl
