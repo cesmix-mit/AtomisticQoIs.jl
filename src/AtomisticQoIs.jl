@@ -22,7 +22,7 @@ using AdvancedHMC
 using PotentialLearning
 
 # functions for MCMC sampling from distributions
-include("Sampling/sampling.jl")
+include("Samplers/samplers.jl")
 
 # functions for defining integration method and parameters
 include("Integrators/integrators.jl")
@@ -35,6 +35,9 @@ include("QoI/qoi.jl")
 
 # functions for computing error/diagnostic metrics
 include("Diagnostics/diagnostics.jl")
+
+# functions for computing discrepancy metrics between measures
+include("Discrepancies/discrepancies.jl")
 
 
 end
