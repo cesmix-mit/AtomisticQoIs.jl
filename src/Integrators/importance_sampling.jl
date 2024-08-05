@@ -1,4 +1,4 @@
-abstract type ISIntegrator <: Integrator end
+abstract type ISIntegrator <: GibbsIntegrator end
 
 """
 struct ISMC <: ISIntegrator
@@ -44,15 +44,15 @@ This method is implemented with the user providing samples from the biasing dist
 # Arguments
 - `g :: Distribution`                               : biasing distribution
 - `xsamp :: Vector`                                 : fixed set of samples
-- `normint :: Union{Integrator, Nothing}`           : integrator for computing normalizing constant of biasing distribution (required for mixture models)
+- `normint :: Union{GibbsIntegrator, Nothing}`           : integrator for computing normalizing constant of biasing distribution (required for mixture models)
 
 """
 mutable struct ISSamples <: ISIntegrator
     g :: Distribution
     xsamp :: Vector
-    normint :: Union{Integrator, Nothing}
+    normint :: Union{GibbsIntegrator, Nothing}
 
-    function ISSamples(g::MixtureModel, xsamp::Vector, normint::Integrator)
+    function ISSamples(g::MixtureModel, xsamp::Vector, normint::GibbsIntegrator)
         return new(g, xsamp, normint)
     end
 
@@ -76,7 +76,7 @@ This method is implemented with the user providing samples from each component m
 - `n :: Int`                 : number of samples
 - `knl :: Kernel`            : kernel function to compute mixture weights
 - `xsamp :: Vector`          : Vector of sample sets from each component distribution
-- `normint :: Integrator`    : Integrator for the approximating the normalizing constant of each component distribution
+- `normint :: GibbsIntegrator`    : Integrator for the approximating the normalizing constant of each component distribution
 
 """
 mutable struct ISMixSamples <: ISIntegrator
@@ -85,14 +85,14 @@ mutable struct ISMixSamples <: ISIntegrator
     n :: Int
     knl :: Kernel
     xsamp :: Vector
-    normint :: Integrator
+    normint :: GibbsIntegrator
 
 
-    function ISMixSamples(g::MixtureModel, refs::Vector, n::Int, knl::Kernel, xsamp::Vector, normint::Integrator)
+    function ISMixSamples(g::MixtureModel, refs::Vector, n::Int, knl::Kernel, xsamp::Vector, normint::GibbsIntegrator)
         return new(g, refs, n, knl, xsamp, normint)
     end
 
-    function ISMixSamples(g::MixtureModel, n::Int, knl::Kernel, xsamp::Vector, normint::Integrator)
+    function ISMixSamples(g::MixtureModel, n::Int, knl::Kernel, xsamp::Vector, normint::GibbsIntegrator)
         d = new()
         d.g = g
         d.refs = [πg.θ for πg in g.components]

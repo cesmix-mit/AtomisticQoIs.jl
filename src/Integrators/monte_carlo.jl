@@ -1,4 +1,4 @@
-abstract type MCIntegrator <: Integrator end
+abstract type MCIntegrator <: GibbsIntegrator end
 
 """
 struct MonteCarlo <: MCIntegrator
@@ -23,12 +23,12 @@ This method is implemented when the distribution cannot be analytically sampled.
 # Arguments
 - `n :: Int`               : number of samples
 - `sampler :: Sampler`     : type of sampler (see `Sampler`)
-- `ρ0 :: Distribution`     : prior distribution of the state
+- `ρ0 :: Union{Distribution, Real, Vector{<:Real}}`     : initial state or prior distribution of the state
 """
 struct MCMC <: MCIntegrator
     n :: Int
     sampler :: Sampler
-    ρ0 :: Distribution
+    ρ0 :: Union{Distribution, Real, Vector{<:Real}}
 end
 
 

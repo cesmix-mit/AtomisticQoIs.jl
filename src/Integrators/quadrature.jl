@@ -1,4 +1,4 @@
-abstract type QuadIntegrator <: Integrator end
+abstract type QuadIntegrator <: GibbsIntegrator end
 
 
 """

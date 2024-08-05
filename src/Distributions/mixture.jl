@@ -79,27 +79,27 @@ function rand(d::MixtureModel{Union{Univariate,Multivariate}, Continuous, Gibbs}
 end 
 
 # 2 - pdf
-function pdf(d::MixtureModel{Union{Univariate,Multivariate}, Continuous, Gibbs}, x::Float64, normint::Integrator)
+function pdf(d::MixtureModel{Union{Univariate,Multivariate}, Continuous, Gibbs}, x::Float64, normint::GibbsIntegrator)
     p = probs(d)
     return sum(p_i * pdf(component(d, i), x, normint) for (i, p_i) in enumerate(p) if !iszero(p_i))
 end 
 
 # multiple samples of x
-function pdf(d::MixtureModel{Union{Univariate,Multivariate}, Continuous, Gibbs}, xsamp::Vector{Float64}, normint::Integrator)
+function pdf(d::MixtureModel{Union{Univariate,Multivariate}, Continuous, Gibbs}, xsamp::Vector{Float64}, normint::GibbsIntegrator)
     p = probs(d)
     return sum(p_i * updf.((component(d, i),), xsamp) ./ normconst(component(d, i), normint) for (i, p_i) in enumerate(p) if !iszero(p_i))
 end 
 
 
 # 3 - log unnormalized pdf
-function logpdf(d::MixtureModel{Union{Univariate,Multivariate}, Continuous, Gibbs}, x::Float64, normint::Integrator)
+function logpdf(d::MixtureModel{Union{Univariate,Multivariate}, Continuous, Gibbs}, x::Float64, normint::GibbsIntegrator)
     p = probs(d)
     lp = logsumexp(log(p_i) + logpdf(component(d, i), x, normint) for (i, p_i) in enumerate(p) if !iszero(p_i))
     return lp
 end
 
 # multiple samples of x
-function logpdf(d::MixtureModel{Union{Univariate,Multivariate}, Continuous, Gibbs}, xsamp::Vector{Float64}, normint::Integrator)
+function logpdf(d::MixtureModel{Union{Univariate,Multivariate}, Continuous, Gibbs}, xsamp::Vector{Float64}, normint::GibbsIntegrator)
     p = probs(d)
     data = reduce(hcat, [log(p_i) .+ logupdf.((component(d, i),), xsamp) .- log(normconst(component(d, i), normint)) for (i, p_i) in enumerate(p) if !iszero(p_i)])
     lp = logsumexp.([data[i,:] for i = 1:size(data,1)])
