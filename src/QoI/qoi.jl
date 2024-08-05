@@ -1,21 +1,39 @@
+import Base: @kwdef
+
 """ 
     QoI
 
-    A struct of abstract type QoI computes the expectation of a function h(x, θ) with respect to an invariant measure p(x, θ).
+    Abstract type defining observable quantities of interest (QoI) from a stochastic system.
 """
 abstract type QoI end
 
 include("gibbs_qoi.jl")
-# include("general_qoi.jl")
+include("hittingtime_qoi.jl")
+include("autocorrelation_qoi.jl")
 
-function assign_param(qoi::GibbsQoI, θ::Vector)
-    return GibbsQoI(h = x -> qoi.h(x, θ), p=Gibbs(qoi.p, θ=θ))
+
+function compute_qoi(
+    θ::Union{Real, Vector{<:Real}}, 
+    qoi::QoI,
+    integrator::Integrator;
+    kwargs...)
+
+    q = assign_param(qoi, θ)
+    return compute_qoi(q, integrator; kwargs...)
 end
 
 
 export
-    # GeneralQoI,
     GibbsQoI,
-    expectation,
-    grad_expectation,
-    assign_param
+    compute_qoi,
+    compute_grad_qoi,
+    assign_param,
+    IntervalDomain,
+    CircularDomain,
+    RectangularDomain,
+    hits_domain,
+    compute_hitting_time,
+    FeynmanKac1D,
+    HittingTimeQoI,
+    AutocorrelationQoI,
+    GreenKuboQoI
