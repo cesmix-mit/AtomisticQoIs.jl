@@ -17,51 +17,48 @@ using Test
     ρx0 = Uniform(-2, 2)
     θtest = [2.0, 4.0]
 
-    # QoI with quadrature integration
+    ## one-point invariant statistics
+    # GibbsQoI with quadrature integration
     ξi, wi = gaussquad(100, gaussjacobi, 0.5, 0.5, limits=[-10, 10])
     ξi, wi = gaussquad(100, gausslegendre, limits=[-10, 10])
 
     GQint = GaussQuadrature(ξi, wi)
-    Qquad = expectation(θtest, q, GQint)
-    ∇Qquad = grad_expectation(θtest, q0, GQint) # using ForwardDiff
-    ∇Qquad2 = grad_expectation(θtest, q, GQint) # using pre-defined gradient
+    Qquad = compute_qoi(θtest, q, GQint).mean
+    ∇Qquad = compute_grad_qoi(θtest, q0, GQint).mean # using ForwardDiff
+    ∇Qquad2 = compute_grad_qoi(θtest, q, GQint).mean # using pre-defined gradient
     @test ∇Qquad ≈ ∇Qquad2
 
-    # QoI with MCMC sampling 
+    # GibbsQoI with MCMC sampling 
     nsamp = 10000
     nuts = NUTS(1e-2)
     MCint = MCMC(nsamp, nuts, ρx0)
-    Qmc = expectation(θtest, q, MCint)
-    @time ∇Qmc = grad_expectation(θtest, q, MCint)
+    Qmc = compute_qoi(θtest, q, MCint).mean
+    @time ∇Qmc = compute_grad_qoi(θtest, q, MCint).mean
 
-    # QoI with importance sampling
+    # GibbsQoI with importance sampling
     # draw MCMC samples
     g = Gibbs(V=V, ∇xV=∇xV, ∇θV=∇θV, β=0.2, θ=[3,3])
     ISint = ISMCMC(g, nsamp, nuts, ρx0)
-    Qis1, his1, wis1 = expectation(θtest, q, ISint)
-    @time ∇Qis1, ∇his1, ∇wis1 = grad_expectation(θtest, q, ISint) 
+    Qis1 = compute_qoi(θtest, q, ISint).mean
+    @time ∇Qis1 = compute_grad_qoi(θtest, q, ISint).mean 
 
     # use fixed samples
     xsamp = rand(g, nsamp, nuts, ρx0)
     ISint2 = ISSamples(g, xsamp)
-    Qis2, his2, wis2 = expectation(θtest, q, ISint2)
-    @time ∇Qis2, ∇his2, ∇wis2 = grad_expectation(θtest, q, ISint2)
+    Qis2 = compute_qoi(θtest, q, ISint2).mean
+    @time ∇Qis2 = compute_grad_qoi(θtest, q, ISint2).mean
 
     # use uniform biasing disttribution
     πu = Uniform(-5,5)
     ISUint = ISMC(πu, nsamp)
-    Qis3, his3, wis3 = expectation(θtest, q, ISUint)
-    @time ∇Qis3, ∇his3, ∇wis3 = grad_expectation(θtest, q, ISUint)
+    Qis3 = compute_qoi(θtest, q, ISUint).mean
+    @time ∇Qis3 = compute_grad_qoi(θtest, q, ISUint).mean
 
     # use fixed samples from biasing distribution
     xsamp = rand(πu, nsamp)
     ISUint2 = ISSamples(πu, xsamp)
-    Qis4, his4, wis4 = expectation(θtest, q, ISUint2)
-    @time ∇Qis4, ∇his4, ∇wis4 = grad_expectation(θtest, q, ISUint2)
-
-    # use mixture biasing distribution
-    
-
+    Qis4 = compute_qoi(θtest, q, ISUint2).mean
+    @time ∇Qis4 = compute_grad_qoi(θtest, q, ISUint2).mean
 
     # test with magnitude of error 
     @test abs((Qquad - Qmc)/Qquad) <= 0.1
@@ -76,6 +73,47 @@ using Test
     @test norm((∇Qquad - ∇Qis3)./∇Qquad) <= 1.0
     @test norm((∇Qquad - ∇Qis4)./∇Qquad) <= 1.0
 
+
+    ## first hitting time statistics
+    D = IntervalDomain([0.5, Inf])
+    q = HittingTimeQoI(x0=0.0, D=D, s=∇xV)
+    β = 2.0
+    
+    # HittingTimeQoI by Feynman-Kac PDE
+    fk = FeynmanKac1D(
+        "l_reflecting_r_absorbing",
+        [-3, D.bounds[1]], # domain
+        0.001, # dx
+        1e-4, # σ
+        β, # β
+    )
+
+    τpde = compute_qoi(θtest, q, fk).mean
+
+    # HittingTimeQoI by Monte Carlo
+    ula = ULA(0.001, β)
+    mc = MCPaths(
+        1000, # number of paths
+        1_000_000, # T
+        ula,
+        0.0, # x0
+    )
+    
+    τmc = compute_qoi(θtest, q, mc).mean
+
+    # test with magnitude of error 
+    @test abs((τpde - τmc)/τpde) <= 0.1
+
+
+    ## two-point invariant statistics
+    Id(x) = x
+    lag = 1000
+    q = AutocorrelationQoI(H=Id, lag=lag, s=∇xV)
+
+    κmc1 = compute_qoi(θtest, q, mc; burnin=1000).mean
+    κmc2 = compute_qoi(θtest, q, mc; burnin=1000).mean
+
+    @test abs((κmc1 - κmc2)/κmc2) <= 0.1
     
 end
 
@@ -98,8 +136,8 @@ end
 
     ξi, wi = gaussquad_2D(25, gausslegendre, limits=[-10, 10])
     GQint = GaussQuadrature(ξi, wi)
-    Qquad = expectation(θtest, q, GQint)
-    ∇Qquad = grad_expectation(θtest, q, GQint)
+    Qquad = compute_qoi(θtest, q, GQint).mean
+    ∇Qquad = compute_grad_qoi(θtest, q, GQint).mean
 
     πg = Gibbs(πgibbs, θ=θtest)
     Z = normconst(πg, GQint)
