@@ -3,6 +3,7 @@ abstract type Sampler end
 include("mala.jl")
 include("hmc.jl")
 include("nuts.jl")
+include("ula.jl")
 
 
 """
@@ -71,4 +72,4 @@ Ind(α::Bool) = α ? 1 : 0
 
 
 
-export MALA, HMC, NUTS, sample
+export MALA, HMC, NUTS, sample, ULA
