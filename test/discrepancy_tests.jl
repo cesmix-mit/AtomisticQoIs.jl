@@ -1,6 +1,6 @@
 using AtomisticQoIs
 using FastGaussQuadrature
-using Distributions
+using Distributions, LinearAlgebra
 using Test
 
 @testset "computing discrepancies" begin
@@ -11,8 +11,10 @@ using Test
     ∇θV(x, θ) = [-x^2 / 2, x^4 / 4]
 
     # densities
-    p = Gibbs(V=V, ∇xV=∇xV, ∇θV=∇θV, β=1.0, θ=[3.0,3.0])
-    q = Gibbs(V=V, ∇xV=∇xV, ∇θV=∇θV, β=0.5, θ=[1.0,5.0])
+    β = 0.5
+    p = Gibbs(V=V, ∇xV=∇xV, ∇θV=∇θV, β=β, θ=[3.0,3.0])
+    q = Gibbs(V=V, ∇xV=∇xV, ∇θV=∇θV, β=β, θ=[1.0,5.0])
+    σ = sqrt(2/β)
 
     # integration points
     ξi, wi = gaussquad(100, gausslegendre, limits=[-10, 10])
@@ -25,21 +27,76 @@ using Test
     MCint = MCSamples(xsamp)
 
 
-    # KL divergence
-    kld = KLDivergence(GQint)
+    ## Gibbs divergences
+    # Hellinger
+    Hpq = compute_divergence(p, q, GQint, Hellinger())
+    Hqp = compute_divergence(q, p, GQint, Hellinger())
 
-    @test compute_discrepancy(p, p, kld) < eps()
-    @test abs.(compute_discrepancy(p, q, kld)) > 0.0
+    @test Hpq > 0.0
+    @test Hqp > 0.0
+    @test abs(Hpq - Hqp) ./ Hpq <= 1.0
+    @test compute_divergence(p, p, GQint, Hellinger()) < eps()
+    
+    # KL divergence
+    Kpq = compute_divergence(p, q, GQint, KLDivergence())
+    Kqp = compute_divergence(q, p, GQint, KLDivergence())
+
+    @test Kpq > 0.0
+    @test Kqp > 0.0
+    @test Kpq != Kqp
+    @test compute_divergence(p, p, GQint, KLDivergence()) < eps()
+
+    @test 2*Hpq^2 <= Kpq
+    @test 2*Hqp^2 <= Kqp
 
     # Fisher divergence
-    fd_q = FisherDivergence(GQint)
-    fd_m = FisherDivergence(MCint)
+    Fpq = compute_divergence(p, q, GQint, FisherDivergence())
+    Fqp = compute_divergence(q, p, GQint, FisherDivergence())
 
-    @test compute_discrepancy(p, p, fd_q) < eps()
-    @test compute_discrepancy(p, p, fd_m) < eps()
+    @test Fpq > 0.0
+    @test Fqp > 0.0
+    @test Fpq != Fqp
+    @test compute_divergence(p, p, GQint, FisherDivergence()) < eps()
 
-    @test abs(compute_discrepancy(p, q, fd_q)) > 0.0
-    @test abs(compute_discrepancy(p, q, fd_m)) > 0.0
-    @test round(compute_discrepancy(p, q, fd_q), digits=1) == round(compute_discrepancy(p, q, fd_m), digits=1)
+    @test Kpq <= 0.5 * Fpq
+    @test Kqp <= 0.5 * Fqp
+
+    # Relative entropy rate
+    Rpq = compute_divergence(p, q, GQint, RelEntropyRate(σ))
+    Rqp = compute_divergence(q, p, GQint, RelEntropyRate(σ))
+
+
+
+    ## Path divergences
+    N = 100
+    xsim = Vector{Vector}(undef, N)
+    ξsim = Vector{Vector}(undef, N)
+
+    ula = ULA(0.01, β)
+    
+    for n = 1:N
+        xsim[n], ξsim[n] = AtomisticQoIs.sample(p.∇xV, ula, 500, 0.0)
+    end
+
+    # Path Hellinger
+    Hel = PathHellinger(xsim, ξsim, 0.01)
+    Hpq = compute_divergence(p, q, Hel)
+    Hab = compute_divergence(p.∇xV, q.∇xV, σ, Hel)
+
+    @test Hqp > 0.0
+    @test Hpq == Hab
+    @test compute_divergence(p, p, Hel) < eps()
+    
+    # Path KL
+    KL = PathKL(xsim, 0.01)
+    Kpq = compute_divergence(p, q, KL)
+    Kab = compute_divergence(p.∇xV, q.∇xV, σ, KL)
+
+    @test Kpq > 0.0
+    @test Kpq == Kab
+    @test compute_divergence(p, p, KL) < eps()
+
+    # Path Fisher
+    
 
 end

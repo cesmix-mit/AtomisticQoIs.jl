@@ -48,7 +48,7 @@ using Test
     Qis2 = compute_qoi(θtest, q, ISint2).mean
     @time ∇Qis2 = compute_grad_qoi(θtest, q, ISint2).mean
 
-    # use uniform biasing disttribution
+    # use uniform biasing distribution
     πu = Uniform(-5,5)
     ISUint = ISMC(πu, nsamp)
     Qis3 = compute_qoi(θtest, q, ISUint).mean
