@@ -14,16 +14,23 @@ export
     GibbsDivergence,
     Hellinger,
     KLDivergence,
+    FisherDivergence,
+    RelEntropyRate,
+    GoalOrientedDivergence,
     PathDivergence,
     PathHellinger,
     PathKL,
+    PathFisher,
     compute_divergence,
+    compute_grad_divergence,
+    RadonNikodym,
     NormError,
     LpNorm,
     MGFError,
     ErrorBound,
     CuiBound,
     StuartBound,
+    GoalOrientedBound,
     compute_error_bound
 
 
