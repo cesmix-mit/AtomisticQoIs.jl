@@ -66,6 +66,7 @@ end
 # 2 - pdf
 updf(d::Gibbs, x) = exp(-d.β * d.V(x))
 pdf(d::Gibbs, x, normint::GibbsIntegrator) = updf(d, x) ./ normconst(d, normint)
+pdf(d::Gibbs, x, Z::Real) = updf(d, x) ./ Z
 
 # 3 - normalization constant (partition function)
 normconst(d::Gibbs, normint::QuadIntegrator) = sum(normint.w .* updf.((d,), normint.ξ))

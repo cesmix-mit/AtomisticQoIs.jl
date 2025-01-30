@@ -56,8 +56,8 @@ mutable struct ISSamples <: ISIntegrator
         return new(g, xsamp, normint)
     end
 
-    function ISSamples(g::Distribution, xsamp::Vector)
-        return new(g, xsamp, nothing)
+    function ISSamples(g::Distribution, xsamp::Vector, normint::GibbsIntegrator=nothing)
+        return new(g, xsamp, normint)
     end
 
 end
