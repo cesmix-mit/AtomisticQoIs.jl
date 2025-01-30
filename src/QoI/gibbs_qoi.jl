@@ -31,8 +31,15 @@ function assign_param(qoi::GibbsQoI, θ::Vector)
 Helper function modifying a GibbsQoI for a specific value of the parameter θ
 
 """
-function assign_param(qoi::GibbsQoI, θ::Vector)
-    return GibbsQoI(h = x -> qoi.h(x, θ), p=Gibbs(qoi.p, θ=θ))
+function assign_param(qoi::GibbsQoI, θ::Union{Real, Vector{<:Real}})
+    if qoi.∇h === nothing
+        return GibbsQoI(h = x -> qoi.h(x, θ), p=Gibbs(qoi.p, θ=θ))
+    else
+        return GibbsQoI(
+            h = x -> qoi.h(x, θ),
+            ∇h = x -> qoi.∇h(x, θ),
+            p=Gibbs(qoi.p, θ=θ))
+    end
 end
 
 
@@ -82,7 +89,15 @@ function compute_qoi(
             integrator::MCMC,
 )
     # x samples
-    xsamp = rand(qoi.p, integrator.n, integrator.sampler, integrator.ρ0) 
+    # xsamp = rand(qoi.p, integrator.T, integrator.sampler, integrator.ρ0)
+    burnin = 1000
+    xsamp, _ = sample(x -> qoi.p.V(x), x -> qoi.p.∇xV(x), integrator.sampler, integrator.T+burnin, integrator.ρ0)
+    xsamp = xsamp[burnin+1:end]
+
+    # subsample from path
+    if integrator.T != integrator.n
+        xsamp = xsamp[StatsBase.sample(1:integrator.T, integrator.n; replace=false)]
+    end
 
     res = (
         mean = mean(qoi.h.(xsamp)),
@@ -101,7 +116,7 @@ function compute_qoi(
     res = (
         mean = mean(qoi.h.(integrator.xsamp)),
         var = var(qoi.h.(integrator.xsamp)),
-        xsamp = xsamp,
+        xsamp = integrator.xsamp,
     )
     return res
 end
@@ -114,11 +129,18 @@ function compute_qoi(
     # x samples
     xsamp = rand(integrator.g, integrator.n, integrator.sampler, integrator.ρ0) 
 
-    # compute log IS weights
-    expec, hsamp, iswts = expectation_is_stable(xsamp, qoi.h, qoi.p, integrator.g)
+    # compute mean
+    EX, hsamp, iswts = expectation_is_stable(xsamp, qoi.h, qoi.p, integrator.g)
+
+    # compute variance
+    qoi2 = GibbsQoI(h= x -> qoi.h(x).^2,
+        ∇h= x -> 2*qoi.h(x)*qoi.∇h(x),
+        p = qoi.p)
+    EX2, hsamp, iswts = expectation_is_stable(xsamp, qoi2.h, qoi.p, integrator.g)
 
     res = (
-        mean = expec,
+        mean = EX,
+        var = EX2 - EX.^2,
         xsamp = xsamp,
         hsamp = hsamp,
         wts = iswts,
@@ -136,11 +158,18 @@ function compute_qoi(
     # x samples
     xsamp = rand(integrator.g, integrator.n)
 
-    # compute log IS weights
-    expec, hsamp, iswts = expectation_is_stable(xsamp, qoi.h, qoi.p, integrator.g)
+    # compute mean
+    EX, hsamp, iswts = expectation_is_stable(xsamp, qoi.h, qoi.p, integrator.g)
+
+    # compute variance
+    qoi2 = GibbsQoI(h= x -> qoi.h(x).^2,
+        ∇h= x -> 2*qoi.h(x)*qoi.∇h(x),
+        p = qoi.p)
+    EX2, hsamp, iswts = expectation_is_stable(xsamp, qoi2.h, qoi.p, integrator.g)
 
     res = (
-        mean = expec,
+        mean = EX,
+        var = EX2 - EX.^2,
         xsamp = xsamp,
         hsamp = hsamp,
         wts = iswts,
@@ -156,10 +185,17 @@ function compute_qoi(
             integrator::ISSamples,
 )         
     # compute log IS weights
-    expec, hsamp, iswts = expectation_is_stable(integrator.xsamp, qoi.h, qoi.p, integrator.g; normint = integrator.normint)
+    EX, hsamp, iswts = expectation_is_stable(integrator.xsamp, qoi.h, qoi.p, integrator.g; normint = integrator.normint)
+
+    # compute variance
+    qoi2 = GibbsQoI(h= x -> qoi.h(x).^2,
+        ∇h= x -> 2*qoi.h(x)*qoi.∇h(x),
+        p = qoi.p)
+    EX2, _, _ = expectation_is_stable(integrator.xsamp, qoi2.h, qoi.p, integrator.g; normint = integrator.normint)
 
     res = (
-        mean = expec,
+        mean = EX,
+        var = EX2 - EX.^2,
         xsamp = integrator.xsamp,
         hsamp = hsamp,
         wts = iswts,
@@ -212,15 +248,27 @@ Computes the gradient of the QoI with respect to the parameters θ, e. g. ∇θ 
 
 
 """
+# parameter already provided in qoi
+function compute_grad_qoi(
+                    qoi::GibbsQoI,
+                    integrator::GibbsIntegrator)
+
+    # compute inner expectation E_p[∇θV]
+    E_qoi = GibbsQoI(h=qoi.p.∇θV, p=qoi.p)
+    E_∇θV = compute_qoi(E_qoi, integrator).mean
+
+    # compute outer expectation
+    hh(x) = qoi.∇h(x) .- qoi.p.β * qoi.h(x) .* (qoi.p.∇θV(x) .- E_∇θV)
+    hh_qoi = GibbsQoI(h=hh, p=qoi.p)
+    return compute_qoi(hh_qoi, integrator)
+end
+
 function compute_grad_qoi(θ::Union{Real, Vector{<:Real}},
                           qoi::GibbsQoI,
                           integrator::GibbsIntegrator)
-
     # compute gradient of h
     if qoi.∇h === nothing
-        ∇θh = (x, γ) -> ForwardDiff.gradient(γ -> qoi.h(x,γ), γ)
-    else
-        ∇θh = (x, γ) -> qoi.∇h(x, γ)
+        qoi.∇h = (x, γ) -> ForwardDiff.gradient(γ -> qoi.h(x,γ), γ)
     end
 
     # compute inner expectation E_p[∇θV]
@@ -228,22 +276,17 @@ function compute_grad_qoi(θ::Union{Real, Vector{<:Real}},
     E_∇θV = compute_qoi(θ, E_qoi, integrator).mean
     
     # compute outer expectation
-    hh(x, γ) = ∇θh(x, γ) - qoi.p.β * qoi.h(x, γ) * (qoi.p.∇θV(x, γ) - E_∇θV)
+    hh(x, γ) = qoi.∇h(x, γ) .- qoi.p.β * qoi.h(x, γ) .* (qoi.p.∇θV(x, γ) .- E_∇θV)
     hh_qoi = GibbsQoI(h=hh, p=qoi.p)
     return compute_qoi(θ, hh_qoi, integrator)
-
 end
 
 
-"""
-function expectation_is_stable(xsamp::Vector, ϕ::Function, f::Gibbs, g::Distribution; normint=nothing)
 
-Helper function for computing stable importance sampling weights (using log formulation).
-
-"""
 function expectation_is_stable(xsamp::Vector, ϕ::Function, f::Gibbs, g::Distribution; normint=nothing)
     logwt(xsamp) = if hasupdf(g) # Gibbs biasing dist
-        logupdf.((f,), xsamp) .- logupdf.((g,), xsamp)
+        Zg = normconst(g, normint)
+        logupdf.((f,), xsamp) .- logupdf.((g,), xsamp) .- log(Zg)
     elseif hasapproxnormconst(g) # mixture biasing dist
         logupdf.((f,), xsamp) .- logpdf(g, xsamp, normint)
     else # other biasing dist from Distributions.jl
