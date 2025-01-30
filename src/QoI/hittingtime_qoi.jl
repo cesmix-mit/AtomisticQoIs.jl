@@ -37,6 +37,23 @@ struct CircularDomain <: HittingDomain
     radius :: Real
 end
 
+"""
+struct EllipseDomain <: HittingDomain
+
+Defines circular domain for N-D state space. 
+
+# Arguments
+- `center :: Vector{<:Real}`        : coordinate of center point (N-D vector)
+- `r :: Vector{<:Real}`             : axis length (N-D vector)
+- `θ :: Real`                       : rotation angle (0 to 2π)
+
+"""
+struct EllipseDomain <: HittingDomain
+    center :: Vector{<:Real}
+    r :: Vector{<:Real}
+    θ :: Real
+end
+EllipseDomain(center::Vector{<:Real}, r::Vector{<:Real}) = EllipseDomain(center::Vector{<:Real}, r::Vector{<:Real}, 0.0)
 
 """
 struct RectangularDomain <: HittingDomain
@@ -52,8 +69,8 @@ struct RectangularDomain <: HittingDomain
     bounds :: Vector
     dim :: Real
 end
-RectangularDomain(bounds::Vector) = RectangularDomain(bounds, length(bounds))
-RectangularDomain(bounds::Vector, dim::Real) = RectangularDomain([bounds for i=1:dim], dim)
+RectangularDomain(bounds::Vector{<:Vector}) = RectangularDomain(bounds, length(bounds))
+RectangularDomain(bounds::Vector{<:Real}, dim::Real) = RectangularDomain([bounds for i=1:dim], dim)
 
 
 """
@@ -70,14 +87,20 @@ hits_domain(x::Real, D::IntervalDomain) = D.bounds[1] <= x <= D.bounds[2]
 
 hits_domain(x::Vector{<:Real}, D::CircularDomain) = norm(x - D.center) <= D.radius
 
+hits_domain(x::Vector{<:Real}, D::EllipseDomain) = (
+    (cos(D.θ)*(x[1]-D.center[1]) + sin(D.θ)*(x[2]-D.center[2]))^2 / D.r[1]^2
+    + (sin(D.θ)*(x[1]-D.center[1]) - cos(D.θ)*(x[2]-D.center[2]))^2 / D.r[2]^2
+    ) <= 1
+
 function hits_domain(x::Vector{<:Real}, D::RectangularDomain)
     hit = Vector{Bool}(undef, D.dim)
     for d = 1:D.dim
         lb, ub = D.bounds[d]
         hit[d] = lb <= x[d] <= ub
     end
-    return any(hit)
+    return all(hit)
 end
+
 
 ## compute first hitting time -------------------------------------------------
 
@@ -90,16 +113,16 @@ function compute_hitting_time(
     T::Real                                 # simulation time length;
 )
     # initialize trajectory
-    xsim = zeros(T); xsim[1] = x0
+    xsim = zeros(T+1); xsim[1] = x0
     ξsim = zeros(T)
-    for t = 2:T
+    for t = 1:T
         # simulate
-        xsim[t], ξsim[t] = propose(xsim[t-1], s, sampler)
+        xsim[t+1], ξsim[t] = propose(xsim[t], s, sampler)
         # evaluate exit time criteria
-        if hits_domain(xsim[t], D)
-            return t, xsim[1:t], ξsim[1:t]
+        if hits_domain(xsim[t+1], D)
+            return Int(t), xsim[1:t], ξsim[1:t]
         elseif t == T
-            return NaN, xsim, ξsim
+            return T, xsim[1:T], ξsim
         end
     end
 end
@@ -114,16 +137,16 @@ function compute_hitting_time(
 )
     d = length(x0)
     # initialize trajectory
-    xsim = [zeros(d) for t=1:T]; xsim[1] = x0
+    xsim = [zeros(d) for t=1:T+1]; xsim[1] = x0
     ξsim = [zeros(d) for t=1:T]
-    for t = 2:T
+    for t = 1:T
         # simulate
-        xsim[t], ξsim[t] = propose(xsim[t-1], s, sampler)
+        xsim[t+1], ξsim[t] = propose(xsim[t], s, sampler)
         # evaluate exit time criteria
-        if hits_domain(xsim[t], D)
-            return t, xsim[1:t], ξsim[1:t]
+        if hits_domain(xsim[t+1], D)
+            return Int(t), xsim[1:t], ξsim[1:t]
         elseif t == T
-            return NaN, xsim, ξsim
+            return T, xsim[1:T], ξsim
         end
     end
 end
@@ -136,16 +159,15 @@ function compute_hitting_time(
     s::Function,                            # score/drift function
     D::HittingDomain,                       # hitting time domain
     T::Real,                                # simulation time length
-    N::Real                                 # number of path realizations
+    J::Real;                                # number of path realizations
 )
-    texit = zeros(N)
-    xsim = Vector{Vector}(undef, N)
-    ξsim = Vector{Vector}(undef, N)
-    for n = 1:N
-        # ξt = rand(Normal(0,sqrt(dt)), 1000)
-        texit[n], xsim[n], ξsim[n] = compute_hitting_time(x0, sampler, s, D, T)
+    thit = zeros(J)
+    xsim = Vector{Vector}(undef, J)
+    ξsim = Vector{Vector}(undef, J)
+    @time Threads.@threads for j = 1:J
+        thit[j], xsim[j], ξsim[j] = compute_hitting_time(x0, sampler, s, D, T)
     end
-    return texit, xsim, ξsim
+    return thit, xsim, ξsim
 end
 
 
@@ -239,7 +261,7 @@ function apply_boundary_cond(
 end
 
 
-struct FeynmanKac1D
+struct FeynmanKac1D <: PathIntegrator
     bc :: String            # type of boundary condition
     domain :: Vector        # domain over which to compute PDE solution
     dx :: Real              # spatial discretization
@@ -270,7 +292,7 @@ mean and variance of the first hitting time τ over the transient path measure P
     s :: Function                               # score (drift) function
 end
 
-function assign_param(qoi::HittingTimeQoI, θ::Vector)
+function assign_param(qoi::HittingTimeQoI, θ::Union{Real, Vector{<:Real}})
     return HittingTimeQoI(x0=qoi.x0, D=qoi.D, s = x -> qoi.s(x, θ))
 end
 
@@ -291,6 +313,48 @@ function compute_qoi(
     return res
 end
 
+function compute_qoi(
+    qoi::HittingTimeQoI,
+    integrator::MCPathSamples,
+)
+    τ = [length(X) for X in integrator.Xpaths] .* integrator.dt
+    res = (
+        mean = mean(τ),
+        var = var(τ),
+    )
+    return res
+end
+
+function compute_qoi(
+    qoi::HittingTimeQoI,
+    integrator::RDPathSamples,
+)
+    τ = [length(X) for X in integrator.Xpaths] .* integrator.dt
+    Npaths = length(integrator.Xpaths)
+    
+    τmean = zeros(Npaths)
+    τm2 = zeros(Npaths)
+    Threads.@threads for n = 1:Npaths
+        rd = RadonNikodym(
+            x -> -integrator.s(x),
+            x -> -qoi.s(x),
+            sqrt(2 / integrator.β),
+            integrator.Xpaths[n],
+            integrator.Wpaths[n],
+            integrator.dt;
+            sgn=-1,
+        )
+        τmean[n] = τ[n] .* rd ./ Npaths
+        τm2[n] = τ[n].^2 .* rd ./ Npaths
+    end
+
+    res = (
+        mean = sum(τmean),
+        var = sum(τm2) .- sum(τmean).^2,
+    )
+    return res
+end
+
 
 function compute_qoi(
     qoi::HittingTimeQoI,
@@ -298,7 +362,7 @@ function compute_qoi(
 )
     (; x0, D, s) = qoi
     (; bc, domain, dx, σ, β) = integrator
-    if domain[2] != D.bounds[1]
+    if !(domain[2] == D.bounds[1] || domain[1] == D.bounds[2])
         throw(ArgumentError("PDE domain not compatible with hitting time domain."))
     end
     lb, rb = domain
@@ -329,4 +393,151 @@ function compute_qoi(
         x_vec = xgrid,
     )
     return res
+end
+
+
+function compute_grad_qoi(
+    θ::Union{Vector, Real},
+    qoi::HittingTimeQoI,
+    integrator::MCPaths,
+    ∇θxV = nothing,
+)
+    # compute gradient of the drift wrt θ
+    if ∇θxV === nothing
+        ∇θxV = (x, γ) -> ForwardDiff.jacobian(γ -> qoi.s(x,γ), γ)
+    end    
+
+    # unpack parameters
+    q = assign_param(qoi, θ)
+    (; x0, D, s) = q
+    (; M, n, sampler, ρ0) = integrator
+    β = sampler.β
+    
+    # sample paths
+    τ, Xpaths, Wpaths = compute_hitting_time(x0, sampler, s, D, n, M)
+    # define change of drift
+    v(x) = - sqrt(β/2) * ∇θxV(x, θ)
+    Mv = [compute_integral(v, ItoIntegrator(Xpaths[j], Wpaths[j])) for j=1:M]
+    ∇τ = mean(τ .* sampler.ϵ .* Mv)
+    return mean(τ.*sampler.ϵ), ∇τ
+end
+
+function compute_grad_qoi(
+    θ::Union{Vector, Real},
+    qoi::HittingTimeQoI,
+    integrator::MCPathSamples,
+    ∇θxV = nothing,
+)
+    # compute gradient of the drift wrt θ
+    if ∇θxV === nothing
+        ∇θxV = (x, γ) -> ForwardDiff.jacobian(γ -> qoi.s(x,γ), γ)
+    end    
+
+    # unpack parameters
+    β = integrator.β
+    ϵ = integrator.dt
+    τ = [length(X) for X in integrator.Xpaths] .* ϵ
+    
+    # define change of drift
+    v(x) = - sqrt(β/2) * ∇θxV(x, θ)
+    Mv = [compute_integral(v, ItoIntegrator(X, W)) for (X,W) in zip(integrator.Xpaths, integrator.Wpaths)]
+    ∇τ = mean(τ .* Mv)
+    return mean(τ), ∇τ
+end
+
+
+# compute gradient of second moment of hitting time
+function compute_grad_qoi2(
+    θ::Union{Real, Vector},
+    qoi::HittingTimeQoI,
+    integrator::MCPaths,
+    ∇θxV = nothing,
+)
+    # compute gradient of the drift wrt θ
+    if ∇θxV === nothing
+        ∇θxV = (x, γ) -> ForwardDiff.gradient(γ -> qoi.s(x,γ), γ)
+    end    
+
+    # unpack parameters
+    q = assign_param(qoi, θ)
+    (; x0, D, s) = q
+    (; M, n, sampler, ρ0) = integrator
+    β = sampler.β
+    
+    # sample paths
+    τ, Xpaths, Wpaths = compute_hitting_time(x0, sampler, s, D, n, M)
+    # define change of drift
+    v(x) = - sqrt(β/2) * ∇θxV(x, θ)
+    Mv = [compute_integral(v, ItoIntegrator(Xpaths[j], Wpaths[j])) for j=1:M]
+    τ2 = mean((τ .* sampler.ϵ).^2)
+    ∇τ2 = mean((τ .* sampler.ϵ).^2 .* Mv)
+    return τ2, ∇τ2
+end
+
+function compute_grad_qoi2(
+    θ::Union{Vector, Real},
+    qoi::HittingTimeQoI,
+    integrator::MCPathSamples,
+    ∇θxV = nothing,
+)
+    # compute gradient of the drift wrt θ
+    if ∇θxV === nothing
+        ∇θxV = (x, γ) -> ForwardDiff.jacobian(γ -> qoi.s(x,γ), γ)
+    end    
+
+    # unpack parameters
+    β = integrator.β
+    ϵ = integrator.dt
+    τ = [length(X) for X in integrator.Xpaths] .* ϵ
+    
+    # define change of drift
+    v(x) = - sqrt(β/2) * ∇θxV(x, θ)
+    Mv = [compute_integral(v, ItoIntegrator(X, W)) for (X,W) in zip(integrator.Xpaths, integrator.Wpaths)]
+    # Mv = [sum(v.(X) .* W) for (X,W) in zip(integrator.Xpaths, integrator.Wpaths)]
+    τ2 = mean(τ.^2)
+    ∇τ2 = mean(τ.^2 .* Mv)
+    return τ2, ∇τ2
+end
+
+
+function compute_grad_qoi2(
+    θ::Union{Vector, Real},
+    qoi::HittingTimeQoI,
+    integrator::RDPathSamples,
+    ∇θxV = nothing,
+)
+    # compute gradient of the drift wrt θ
+    if ∇θxV === nothing
+        ∇θxV = (x, γ) -> ForwardDiff.jacobian(γ -> qoi.s(x,γ), γ)
+    end    
+
+    # unpack parameters
+    β = integrator.β
+    ϵ = integrator.dt
+    τ = [length(X) for X in integrator.Xpaths] .* ϵ
+    
+    # define change of drift
+    v(x) = - sqrt(β/2) * ∇θxV(x, θ)
+    Mv = [compute_integral(v, ItoIntegrator(X, W)) for (X,W) in zip(integrator.Xpaths, integrator.Wpaths)]
+    # Mv = [sum(v.(X) .* W) for (X,W) in zip(integrator.Xpaths, integrator.Wpaths)]
+    
+    Npaths = length(integrator.Xpaths)
+    
+    τ2 = zeros(Npaths)
+    ∇τ2 = zeros(Npaths)
+    Threads.@threads for n = 1:Npaths
+        rd = RadonNikodym(
+            x -> -integrator.s(x),
+            x -> -qoi.s(x),
+            sqrt(2 / integrator.β),
+            integrator.Xpaths[n],
+            integrator.Wpaths[n],
+            integrator.dt;
+            sgn=-1,
+        )
+        τ2[n] = τ[n].^2 .* rd ./ Npaths
+        ∇τ2[n] = τ[n].^2 .* Mv[n] .* rd ./ Npaths
+    end
+
+    return sum(τ2), sum(∇τ2)
 end

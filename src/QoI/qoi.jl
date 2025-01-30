@@ -7,6 +7,7 @@ import Base: @kwdef
 """
 abstract type QoI end
 
+include("general_qoi.jl")
 include("gibbs_qoi.jl")
 include("hittingtime_qoi.jl")
 include("autocorrelation_qoi.jl")
@@ -25,11 +26,15 @@ end
 
 export
     GibbsQoI,
+    GeneralQoI,
     compute_qoi,
     compute_grad_qoi,
+    compute_grad_qoi2,
     assign_param,
+    HittingDomain,
     IntervalDomain,
     CircularDomain,
+    EllipseDomain,
     RectangularDomain,
     hits_domain,
     compute_hitting_time,
