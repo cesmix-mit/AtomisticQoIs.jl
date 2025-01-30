@@ -26,6 +26,8 @@ export
     MCMC,
     MCSamples,
     MCPaths,
+    MCPathSamples,
+    RDPathSamples,
     ISIntegrator,
     ISMC,
     ISMCMC,

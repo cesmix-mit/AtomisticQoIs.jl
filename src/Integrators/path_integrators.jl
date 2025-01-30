@@ -17,6 +17,22 @@ struct MCPaths <: PathIntegrator
     ρ0 :: Union{Distribution, Real, Vector{<:Real}}
 end
 
+struct MCPathSamples <: PathIntegrator
+    Xpaths :: Vector
+    Wpaths :: Vector
+    dt :: Real # time step size
+    β :: Real # inverse temp.
+    N :: Real # max number of time steps
+end
+
+struct RDPathSamples <: PathIntegrator
+    s :: Function
+    Xpaths :: Vector
+    Wpaths :: Vector
+    dt :: Real # time step size
+    β :: Real # inverse temp.
+    N :: Real # max number of time steps
+end
 
 struct RiemannIntegrator <: PathIntegrator
     Xpath :: Vector
@@ -30,4 +46,4 @@ end
 
 compute_integral(f::Function, int::RiemannIntegrator) = sum(f.(int.Xpath) .* int.dt)
 
-compute_integral(f::Function, int::ItoIntegrator) =f.(int.Xpath)' * int.Wpath
+compute_integral(f::Function, int::ItoIntegrator) =sum([f(X)' * W for (X,W) in zip(int.Xpath,int.Wpath)])
