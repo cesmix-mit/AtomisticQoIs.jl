@@ -274,14 +274,14 @@ function compute_grad_divergence(
     ∇E_d = compute_grad_divergence(g_p.p, g_q.p, integrator, G.D, args...; wrt=1)
     
     # skip next calculations if ∇h = 0
-    xtest = rand(d)
-    if g_p.∇h(xtest) == zeros(d) || g_p.∇h(xtest) == zeros(d)
-        ∇E_g2 = 0
-        E_d = 0
-    else
+    # xtest = rand(d)
+    # if g_p.∇h(xtest) == zeros(d) || g_p.∇h(xtest) == zeros(d)
+    #     ∇E_g2 = 0
+    #     E_d = 0
+    # else
         ∇E_g2 = compute_grad_qoi(g2, integrator).mean
         E_d = compute_divergence(g_p.p, g_q.p, integrator, G.D; kwargs...)
-    end
+    # end
 
     if mq == nothing
         mq = E_g2 

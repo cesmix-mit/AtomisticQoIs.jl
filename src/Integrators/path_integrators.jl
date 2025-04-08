@@ -46,4 +46,4 @@ end
 
 compute_integral(f::Function, int::RiemannIntegrator) = sum(f.(int.Xpath) .* int.dt)
 
-compute_integral(f::Function, int::ItoIntegrator) =sum([f(X)' * W for (X,W) in zip(int.Xpath,int.Wpath)])
+compute_integral(f::Function, int::ItoIntegrator) =sum([f(X) .* W for (X,W) in zip(int.Xpath,int.Wpath)])
