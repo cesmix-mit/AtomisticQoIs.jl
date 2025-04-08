@@ -417,7 +417,10 @@ function compute_grad_qoi(
     τ, Xpaths, Wpaths = compute_hitting_time(x0, sampler, s, D, n, M)
     # define change of drift
     v(x) = - sqrt(β/2) * ∇θxV(x, θ)
-    Mv = [compute_integral(v, ItoIntegrator(Xpaths[j], Wpaths[j])) for j=1:M]
+    Mv = Vector{Vector{Float64}}(undef, M)
+    Threads.@threads for j=1:M 
+        Mv[j] = compute_integral(v, ItoIntegrator(Xpaths[j], Wpaths[j]))
+    end
     ∇τ = mean(τ .* sampler.ϵ .* Mv)
     return mean(τ.*sampler.ϵ), ∇τ
 end
@@ -437,10 +440,15 @@ function compute_grad_qoi(
     β = integrator.β
     ϵ = integrator.dt
     τ = [length(X) for X in integrator.Xpaths] .* ϵ
-    
+    M = length(integrator.Xpaths)
+
     # define change of drift
     v(x) = - sqrt(β/2) * ∇θxV(x, θ)
-    Mv = [compute_integral(v, ItoIntegrator(X, W)) for (X,W) in zip(integrator.Xpaths, integrator.Wpaths)]
+    # Mv = [compute_integral(v, ItoIntegrator(X, W)) for (X,W) in zip(integrator.Xpaths, integrator.Wpaths)]
+    Mv = Vector{Vector{Float64}}(undef, M)
+    Threads.@threads for j=1:M 
+        Mv[j] = compute_integral(v, ItoIntegrator(integrator.Xpaths[j], integrator.Wpaths[j]))
+    end
     ∇τ = mean(τ .* Mv)
     return mean(τ), ∇τ
 end
@@ -468,7 +476,10 @@ function compute_grad_qoi2(
     τ, Xpaths, Wpaths = compute_hitting_time(x0, sampler, s, D, n, M)
     # define change of drift
     v(x) = - sqrt(β/2) * ∇θxV(x, θ)
-    Mv = [compute_integral(v, ItoIntegrator(Xpaths[j], Wpaths[j])) for j=1:M]
+    Mv = Vector{Vector{Float64}}(undef, M)
+    Threads.@threads for j=1:M 
+        Mv[j] = compute_integral(v, ItoIntegrator(Xpaths[j], Wpaths[j]))
+    end
     τ2 = mean((τ .* sampler.ϵ).^2)
     ∇τ2 = mean((τ .* sampler.ϵ).^2 .* Mv)
     return τ2, ∇τ2
@@ -489,11 +500,14 @@ function compute_grad_qoi2(
     β = integrator.β
     ϵ = integrator.dt
     τ = [length(X) for X in integrator.Xpaths] .* ϵ
-    
+    M = length(integrator.Xpaths)
+
     # define change of drift
     v(x) = - sqrt(β/2) * ∇θxV(x, θ)
-    Mv = [compute_integral(v, ItoIntegrator(X, W)) for (X,W) in zip(integrator.Xpaths, integrator.Wpaths)]
-    # Mv = [sum(v.(X) .* W) for (X,W) in zip(integrator.Xpaths, integrator.Wpaths)]
+    Mv = Vector{Vector{Float64}}(undef, M)
+    Threads.@threads for j=1:M 
+        Mv[j] = compute_integral(v, ItoIntegrator(integrator.Xpaths[j], integrator.Wpaths[j]))
+    end
     τ2 = mean(τ.^2)
     ∇τ2 = mean(τ.^2 .* Mv)
     return τ2, ∇τ2
@@ -515,12 +529,14 @@ function compute_grad_qoi2(
     β = integrator.β
     ϵ = integrator.dt
     τ = [length(X) for X in integrator.Xpaths] .* ϵ
-    
+    M = length(integrator.Xpaths)
+
     # define change of drift
     v(x) = - sqrt(β/2) * ∇θxV(x, θ)
-    Mv = [compute_integral(v, ItoIntegrator(X, W)) for (X,W) in zip(integrator.Xpaths, integrator.Wpaths)]
-    # Mv = [sum(v.(X) .* W) for (X,W) in zip(integrator.Xpaths, integrator.Wpaths)]
-    
+    Mv = Vector{Vector{Float64}}(undef, M)
+    Threads.@threads for j=1:M 
+        Mv[j] = compute_integral(v, ItoIntegrator(integrator.Xpaths[j], integrator.Wpaths[j]))
+    end
     Npaths = length(integrator.Xpaths)
     
     τ2 = zeros(Npaths)
