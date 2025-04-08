@@ -85,6 +85,30 @@ function compute_divergence(
     return KL / (2*Npaths)
 end
 
+function compute_divergence(
+    p::Gibbs, # model
+    q::Gibbs, # ref
+    qoi::HittingTimeQoI,
+    statint::GibbsIntegrator,
+    pathint::FeynmanKac1D,
+    G::GoalOrientedDivergence;
+    mq = nothing,
+)
+
+    # compute divergence metric
+    RER = compute_divergence(p,q,statint,RelEntropyRate())
+
+    # compute second moment of observable
+    res = compute_qoi(p.θ, qoi, pathint)
+    mp = res.var + res.mean^2
+    T = res.mean .+ 2*sqrt(res.var) # placeholder value
+
+    if mq == nothing
+        mq = mp
+    end
+    # return sqrt(T)/2 * (sqrt(mp)+sqrt(mq)) * sqrt(RER)
+    return T/2 * (mq + mp) * RER
+end
 
 function compute_divergence(
     p::Gibbs, # model
@@ -136,6 +160,32 @@ function compute_divergence(
     return T/2 * (mq + mp) * RER
 end
 
+
+function compute_grad_divergence(
+    p::Gibbs, # model
+    q::Gibbs, # ref
+    qoi::HittingTimeQoI,
+    statint::GibbsIntegrator,
+    pathint::FeynmanKac1D,
+    G::GoalOrientedDivergence,
+    args...;
+    mq = nothing,
+)
+
+    # compute divergence metric and its gradient
+    E_d = compute_divergence(p,q,statint,RelEntropyRate())
+    ∇E_d = compute_grad_divergence(p,q,statint,RelEntropyRate(),args...;wrt=1)
+
+    # compute second moment of observable and its gradient
+    E_τ2, ∇E_τ2 = compute_grad_qoi2(p.θ, qoi, pathint, args...)
+
+    if mq == nothing
+        mq == E_τ2
+    end
+
+    # return sqrt(T)/4 * ( ∇E_τ2 .* sqrt(E_d) ./ sqrt(E_τ2) .+ (sqrt(mq) + sqrt(E_τ2)) * ∇E_d ./ sqrt(E_d) )
+    return T/2 * (∇E_τ2 .* E_d .+ (mq .+ E_τ2) .* ∇E_d)
+end
 
 function compute_grad_divergence(
     p::Gibbs, # model
